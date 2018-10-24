@@ -18,6 +18,7 @@ namespace ConstraintTriangles
 
             this.rb_AutoTriangle.Checked = true;
             this.rb_ManualTriangle.Checked = false;
+            this.precision = 0.01F;
         }
     }
 }
