@@ -4,44 +4,43 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
+///在实际的应用之中，坐标应该是double类型的，这里是有int是因为画布只能捕捉整形像素
+///在三维计算中也是同样的原理，映射到一个平面上即可计算出三角网
 namespace ConstraintTriangles
 {
     //////主窗体伙伴类，用到的部分结构体与内置方法
     partial class MainForm
     {
-        protected readonly double precision; //默认的阈值
-
+        protected readonly double precision = 0.01; //默认的阈值--c#里面画图似乎只有整数
+        private readonly int threshold = 3;//绘制点的阈值
         enum enumStackType
         {
             consVertType = 1<<1,//约束点
             consLineType = 1<<2//约束线
         }
-
     }
     //计算凸包时的临时结构体
     struct Pnt_ID
     {
-        public Pnt_ID(int index , double fvalue)
+        public Pnt_ID(int index , int fvalue)
         {
             this.index = index;
             this.fvalue = fvalue;
         }
-        public double fvalue;
+        public int fvalue;
         public int index;
     }
     struct DVertex
     {
-        public DVertex(double dx,double dy,double dz, int isHullVertex,bool isFastigiumPointFlag)
+        public DVertex(int dx,int dy, int isHullVertex,bool isFastigiumPointFlag = false)
         {
             this.dx = dx;
             this.dy = dy;
-            this.dz = dz;
             this.isHullVertex = isHullVertex;
             this.isFastigiumPointFlag = isFastigiumPointFlag;
         }
-        public double dx;
-        public double dy;
-        public double dz;
+        public int dx;
+        public int dy;
 
         public int isHullVertex;//点的类型标记--暂定
         public bool isFastigiumPointFlag;//屋脊点标记
@@ -63,7 +62,6 @@ namespace ConstraintTriangles
             return base.GetHashCode();
         }
     }
-
     struct DEdge
     {
         public DEdge(int dEdge_index1,int dEdge_index2,bool isHullEdge,int AdjDTriangle1_index,int AdjDTriangle2_index)
@@ -81,7 +79,6 @@ namespace ConstraintTriangles
         public int AdjDTriangle1_index;//边关联三角形
         public int AdjDTriangle2_index;
     }
-
     struct DTriangle
     {
         public DTriangle(int dTriangle_index1, int dTriangle_index2, int dTriangle_index3, bool isDelete, bool edge1_isHull, bool edge2_isHull, bool edge3_isHull, int AdjDTriangleIndex1, int AdjDTriangleIndex2, int AdjDTriangleIndex3)
@@ -111,4 +108,6 @@ namespace ConstraintTriangles
         public int AdjDTriangleIndex2;
         public int AdjDTriangleIndex3;
     }
+
+
 }
