@@ -17,11 +17,14 @@ namespace ConstraintTriangles
 {
     public partial class MainForm : Form
     {
+        private Graphics g = null;
+        
         private IList<DTriangle> _triangles;//三角形集合
         private IList<DEdge> _edges;
         private IList<DVertex> _vertices;
 
         private IList<DVertex> hullVertices;//初始外包
+        private IList<DEdge> outsideEdges;//外包边
         private IList<int> hullPoints;//初始外包矩形索引
         public MainForm()
         {
@@ -32,6 +35,7 @@ namespace ConstraintTriangles
             _vertices = new List<DVertex>();
             hullVertices = new List<DVertex>();
             hullPoints = new List<int>();
+            outsideEdges = new List<DEdge>();
 
             this.btn_StartTriangle.Click += btn_StartTriangle_Click;
             this.btn_Clear.Click += btn_Clear_Click;
@@ -51,6 +55,9 @@ namespace ConstraintTriangles
             this._triangles.Clear();
             this._edges.Clear();
             this._vertices.Clear();
+            this.hullPoints.Clear();
+            this.hullVertices.Clear();
+            this.outsideEdges.Clear();
 
             this.pictureBox.CreateGraphics().Clear(Color.White);
         }
@@ -62,6 +69,8 @@ namespace ConstraintTriangles
 
         void pictureBox_MouseDown(object sender, MouseEventArgs e)
         {
+            if (e.Button == MouseButtons.Right)
+                return;
             Point[] pts = new Point[4] { new Point(e.X - threshold, e.Y - threshold), new Point(e.X + threshold, e.Y - threshold), new Point(e.X + threshold, e.Y + threshold), new Point(e.X - threshold, e.Y + threshold) };
             Graphics g = GetGraphics();
             g.FillPolygon(Brushes.Red, pts);
@@ -83,11 +92,20 @@ namespace ConstraintTriangles
         private void ConstructDelaunay()
         {
             ClearTriangles();
+            if (this._vertices.Count == 3)
+            {
+                //直接生成一个三角形
+                GetGraphics().DrawLines(Pens.HotPink, GetPoints());
+            }
+            ComputeHullVertex();
         }
         //清除之前绘制的信息
         private void ClearTriangles()
         {
-
+            hullPoints.Clear();
+            _vertices.Clear();
+            _edges.Clear();
+            _triangles.Clear();
         }
         //根据当前的点集计算外包
         private void ComputeHullVertex()
@@ -128,11 +146,9 @@ namespace ConstraintTriangles
                 hullPoints.Add(pMaxAdd.index);
                 hullPoints.Add(pMaxMinus.index);
                 hullPoints.Add(pMaxMinus.index);
-
             }
         }
 
-        private Graphics g = null;
         private Graphics GetGraphics()
         {
             if (g == null)
