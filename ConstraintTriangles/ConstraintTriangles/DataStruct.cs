@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace ConstraintTriangles
 {
-        //计算凸包时的临时结构体
+        //计算凸包时的临时结构体--结构体在属性复制操作时不是很方便，将结构体改成class
         struct _PtTemp
         {
             public _PtTemp(int index, int value)
@@ -17,7 +17,7 @@ namespace ConstraintTriangles
             public int value;
             public int index;
         }
-        struct DVertex
+        class DVertex
         {
             public DVertex(int dx, int dy, int isHullVertex, bool isFastigiumPointFlag = false)
             {
@@ -49,9 +49,9 @@ namespace ConstraintTriangles
                 return base.GetHashCode();
             }
         }
-        struct DEdge
+        class DEdge
         {
-            public DEdge(int dEdge_index1, int dEdge_index2, bool isHullEdge, int AdjDTriangle1_index, int AdjDTriangle2_index)
+            public DEdge(int dEdge_index1, int dEdge_index2, bool isHullEdge=false, int AdjDTriangle1_index=-1, int AdjDTriangle2_index=-1)
             {
                 this.dEdge_index1 = dEdge_index1;
                 this.dEdge_index2 = dEdge_index2;
@@ -84,7 +84,7 @@ namespace ConstraintTriangles
                 return base.GetHashCode();
             }
         }
-        struct DTriangle
+        class DTriangle
         {
             public DTriangle(int dTriangle_index1, int dTriangle_index2, int dTriangle_index3, bool isDelete, bool edge1_isHull, bool edge2_isHull, bool edge3_isHull, int AdjDTriangleIndex1, int AdjDTriangleIndex2, int AdjDTriangleIndex3)
             {

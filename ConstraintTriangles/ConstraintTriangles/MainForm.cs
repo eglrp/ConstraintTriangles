@@ -13,6 +13,8 @@ using System.Windows.Forms;
 ///1.增加了外包多边形的约束，保证了生成的三角网一定是在多边形范围内的
 ///2.可以在范围内（不包括外包线上）增加约束点（未呈现在代码中，原理与之前的生成三角网的逻辑一致--先全部生成三角网，再外包约束）
 ///3.在范围内增加约束线（实际上与外包约束线算法是相同的，这里只实现简单的单约束线，多约束线原理相同，但需考虑约束线不相交）
+///4.不判断非法外包！！！
+///5.绘制非法，直接绘制外包多边形，最后右键结束绘制！！
 namespace ConstraintTriangles
 {
     public partial class MainForm : Form
@@ -76,10 +78,14 @@ namespace ConstraintTriangles
             g.FillPolygon(Brushes.Red, pts);
             DVertex dv = new DVertex(e.X, e.Y, 1);
             this._vertices.Add(dv);
+            this.hullVertices.Add(dv);
             if (_vertices.Count > 1)
                 g.DrawLines(Pens.DeepPink, GetPoints());
-            if(_vertices.Count>2)
+            if (_vertices.Count > 2)
+            {
+                ClearTriangles();
                 ConstructDelaunay();
+            }
         }
 
         void pictureBox_Paint(object sender, PaintEventArgs e)
@@ -91,21 +97,32 @@ namespace ConstraintTriangles
         //计算delaunay三角网
         private void ConstructDelaunay()
         {
-            ClearTriangles();
-            if (this._vertices.Count == 3)
-            {
-                //直接生成一个三角形
-                GetGraphics().DrawLines(Pens.HotPink, GetPoints());
-            }
+            ConstructHullLines();
             ComputeHullVertex();
+            //Array.ForEach<int>(hullPoints.ToArray(), index => { DVertex dv = _vertices[index]; dv.isHullVertex = -1; _vertices[index] = dv; });//注意c#struct是值类型，不像c++是引用类型
+            Array.ForEach(hullPoints.ToArray(),index=>_vertices[index].isHullVertex=-1);
         }
         //清除之前绘制的信息
         private void ClearTriangles()
         {
-            hullPoints.Clear();
             _vertices.Clear();
             _edges.Clear();
             _triangles.Clear();
+            hullPoints.Clear();
+            hullVertices.Clear();
+            outsideEdges.Clear();
+        }
+        //建立手绘外包边集合
+        private void ConstructHullLines()
+        {
+            if (outsideEdges.Count > 0)
+                outsideEdges.Clear();
+            int count = hullVertices.Count; 
+            for (int i = 0; i < count; ++i)
+            {
+                DEdge edge = new DEdge(i, (i + 1) / count);
+                outsideEdges.Add(edge);
+            }
         }
         //根据当前的点集计算外包
         private void ComputeHullVertex()
@@ -147,6 +164,7 @@ namespace ConstraintTriangles
                 hullPoints.Add(pMaxMinus.index);
                 hullPoints.Add(pMaxMinus.index);
             }
+            hullPoints.Distinct();//去除重复索引，针对三角形
         }
 
         private Graphics GetGraphics()
