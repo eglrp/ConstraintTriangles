@@ -99,6 +99,7 @@ namespace ConstraintTriangles
         private void BuildDelaunay()
         {
             CreateConvex();
+            CreateHullTriangle();
         }
         //计算delaunay三角网
         private void CreateConvex()
@@ -313,7 +314,15 @@ namespace ConstraintTriangles
         //
         private bool IsCleanTriangle(int id1, int id2, int id3)
         {
-
+            for (int i = 0; i < hullPoints.Count; ++i)
+            {
+                //跳过已构网的点和三角形顶点
+                if (_vertices[hullPoints[i]].isHullVertex == 2 || hullPoints[i] == id1 || hullPoints[i]== id2 || hullPoints[i] == id3)
+                    continue;
+                if (InTriangleExtCircle(_vertices[hullPoints[i]].dx, _vertices[hullPoints[i]].dy, _vertices[hullPoints[id1]].dx, _vertices[hullPoints[id1]].dy, _vertices[hullPoints[id2]].dx, _vertices[hullPoints[id2]].dy, _vertices[hullPoints[id3]].dx, _vertices[hullPoints[id3]].dy))
+                    return false;
+            }
+            return true;
         }
         //判断三点共直线，x3,y3为判断点
         private bool JudgeInLine(float x1, float y1, float x2, float y2, float x3, float y3)
@@ -359,7 +368,21 @@ namespace ConstraintTriangles
             return true;
         }
 
-
+        //判断点是否在三角形的外接圆中--xp，yp是凸壳点
+        private bool InTriangleExtCircle(float xp, float yp, float x1, float y1, float x2, float y2, float x3, float y3)
+        {
+            float RadiusSquare; //半径的平方
+            float DisSquare; //距离的平方
+            float BaryCntX = 0.0f, BaryCntY = 0.0f;
+            if (!GetTriangleBarycnt(x1, y1, x2, y2, x3, y3, BaryCntX, BaryCntY))
+                return false;
+            RadiusSquare = (x1 - BaryCntX) * (x1 - BaryCntX) + (y1 - BaryCntY) * (y1 - BaryCntY);
+            DisSquare = (xp - BaryCntX) * (xp - BaryCntX) + (yp - BaryCntY) * (yp - BaryCntY);
+            if (DisSquare <= RadiusSquare)
+                return true;
+            else
+                return false;
+        }
         #endregion
 
 
