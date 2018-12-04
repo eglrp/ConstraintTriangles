@@ -20,7 +20,7 @@ namespace ConstraintTriangles
     public partial class MainForm : Form
     {
         private Graphics g = null;
-        
+
         private IList<DTriangle> _triangles;//三角形集合
         private IList<DEdge> _edges;
         private IList<DVertex> _vertices;
@@ -28,6 +28,7 @@ namespace ConstraintTriangles
         private IList<DVertex> hullVertices;//初始外包
         private IList<DEdge> outsideEdges;//外包边
         private IList<int> hullPoints;//初始外包矩形索引
+        private IList<int> hullPoints_copy;
         public MainForm()
         {
             InitializeComponent();
@@ -37,6 +38,7 @@ namespace ConstraintTriangles
             _vertices = new List<DVertex>();
             hullVertices = new List<DVertex>();
             hullPoints = new List<int>();
+            hullPoints_copy = new List<int>();
             outsideEdges = new List<DEdge>();
 
             this.btn_StartTriangle.Click += btn_StartTriangle_Click;
@@ -71,7 +73,7 @@ namespace ConstraintTriangles
 
         void pictureBox_MouseDown(object sender, MouseEventArgs e)
         {
-            if (e.Button == MouseButtons.Right)
+            if (e.Button == MouseButtons.Right)//右键设置为闭合
                 return;
             Point[] pts = new Point[4] { new Point(e.X - threshold, e.Y - threshold), new Point(e.X + threshold, e.Y - threshold), new Point(e.X + threshold, e.Y + threshold), new Point(e.X - threshold, e.Y + threshold) };
             Graphics g = GetGraphics();
@@ -84,7 +86,7 @@ namespace ConstraintTriangles
             if (_vertices.Count > 2)
             {
                 ClearTriangles();
-                ConstructDelaunay();
+                BuildDelaunay();
             }
         }
 
@@ -94,13 +96,20 @@ namespace ConstraintTriangles
         }
 
         #region 计算三角网的方法
+        private void BuildDelaunay()
+        {
+            CreateConvex();
+        }
         //计算delaunay三角网
-        private void ConstructDelaunay()
+        private void CreateConvex()
         {
             ConstructHullLines();
             ComputeHullVertex();
             //Array.ForEach<int>(hullPoints.ToArray(), index => { DVertex dv = _vertices[index]; dv.isHullVertex = -1; _vertices[index] = dv; });//注意c#struct是值类型，不像c++是引用类型
-            Array.ForEach(hullPoints.ToArray(),index=>_vertices[index].isHullVertex=-1);
+            Array.ForEach(hullPoints.ToArray(), index => _vertices[index].isHullVertex = -1);
+            hullPoints = hullPoints.OrderBy(i => i).ToList();
+            hullPoints_copy = hullPoints;//应该不用深拷贝？！
+            ReconstructHullPointFromDVertices();
         }
         //清除之前绘制的信息
         private void ClearTriangles()
@@ -117,7 +126,7 @@ namespace ConstraintTriangles
         {
             if (outsideEdges.Count > 0)
                 outsideEdges.Clear();
-            int count = hullVertices.Count; 
+            int count = hullVertices.Count;
             for (int i = 0; i < count; ++i)
             {
                 DEdge edge = new DEdge(i, (i + 1) / count);
@@ -129,7 +138,7 @@ namespace ConstraintTriangles
         {
             _PtTemp pMaxMinus, pMinMinus, pMaxAdd, pMinAdd;
             pMinMinus.index = pMinAdd.index = pMaxMinus.index = pMaxAdd.index = 0;
-            pMinMinus.value  = pMaxMinus.value = _vertices[0].dx - _vertices[0].dy;
+            pMinMinus.value = pMaxMinus.value = _vertices[0].dx - _vertices[0].dy;
             pMinAdd.value = pMaxAdd.value = _vertices[0].dx + _vertices[0].dy;
             int temp = 0;
             for (int i = 1; i < _vertices.Count; ++i)
@@ -145,7 +154,7 @@ namespace ConstraintTriangles
                 else if (temp < pMinMinus.value)
                 {
                     pMinMinus.value = temp;
-                    pMinMinus.index = i; 
+                    pMinMinus.index = i;
                 }
                 temp = _vertices[i].dx + _vertices[i].dy;
                 if (temp > pMaxAdd.value)
@@ -166,6 +175,193 @@ namespace ConstraintTriangles
             }
             hullPoints.Distinct();//去除重复索引，针对三角形
         }
+        //将其他点加入到点集合中
+        private void ReconstructHullPointFromDVertices()
+        {
+            int count = hullPoints_copy.Count;
+            for (int i = 0; i < count; ++i)
+            {
+                ConvexLine(_vertices[hullPoints_copy[i % count]], _vertices[hullPoints_copy[(i + 1) % count]]);
+            }
+            for (int index = 0; index < hullPoints.Count; ++index)
+            {
+                _vertices[hullPoints[index]].isHullVertex = 1;//标记凸壳点
+            }
+        }
+        private void ConvexLine(DVertex dv1, DVertex dv2)
+        {
+            float distance = -1.0f;
+            int currentIndex = -1;
+            for (int i = 0; i < _vertices.Count; ++i)
+            {//这里的冗余非常多，可以考虑传递索引？
+                DVertex vecPoint = _vertices[i];
+                if (vecPoint.isHullVertex == -1)
+                    continue;
+                int position = VectorXMultiplyVertex(dv1, dv2, vecPoint);//计算共线情况
+                if (position == -1)
+                {//在线的左侧，继续搜索
+                    continue;
+                }
+                else if (position == 0)
+                {//在线段上，则记下与线的距离
+                    if (distance == -1.0f)
+                    {
+                        distance = 0.0f;
+                        currentIndex = i;
+                    }
+                }
+                else if (position == 2)
+                {//在线段延长线上，继续搜索
+                    continue;
+                }
+                else if (position == 1)
+                {//在线的右侧，记录下与线段距离最远的那个点
+                    float dis = VLDistance(dv1, dv2, vecPoint);
+                    if (distance < dis)
+                    {
+                        distance = dis;
+                        currentIndex = i;
+                    }
+                }
+            }
+            if (distance == -1.0f)
+            {
+                return;
+            }
+            else
+            {
+                if (distance == 0.0f)
+                {//三点共线
+                    return;
+                }
+                int index = 0;
+                for (int i = 0; i < hullPoints.Count; ++i)
+                {
+                    DVertex v = _vertices[hullPoints[i]];
+                    if (v == dv2)
+                    {
+                        index = i;
+                        break;
+                    }
+                }
+                hullPoints.Insert(index, currentIndex);
+                _vertices[currentIndex].isHullVertex = -1;
+                ConvexLine(dv1, _vertices[currentIndex]);
+                ConvexLine(_vertices[currentIndex], dv2);
+            }
+        }
+        /// 点V3与 点V1,V2组成的线段的位置关系
+        /// 采用的算法为面积法。1表示在其右侧，-1表示在其左侧，0表示在线段上，2表示在线段的延长线上
+        private int VectorXMultiplyVertex(DVertex V1, DVertex V2, DVertex V3)
+        {
+            float S = (V2.dx - V1.dx) * (V3.dy - V1.dy) - (V3.dx - V1.dx) * (V2.dy - V1.dy);
+            if (S == 0)
+            {
+                if (V3.dx >= Math.Min(V1.dx, V2.dx) && V3.dx <= Math.Max(V1.dx, V2.dx) && V3.dy >= Math.Min(V1.dy, V2.dy) && V3.dy <= Math.Max(V1.dy, V2.dy))
+                {
+                    return 0;
+                }
+                else
+                {
+                    return 2;
+                }
+            }
+            else if (S > 0)
+            {
+                return -1;
+            }
+            else if (S < 0)
+            {
+                return 1;
+            }
+            return -1;
+        }
+        /// 点V3 与 点V1,V2组成的直线的距离
+        private float VLDistance(DVertex V1, DVertex V2, DVertex V3)
+        {
+            double top = (V2.dy - V1.dy) * V3.dx + (V1.dx - V2.dx) * V3.dy + V1.dy * (V2.dx - V1.dx) - (V2.dy - V1.dy) * V1.dx;
+            double bottom = Math.Sqrt((V2.dy - V1.dy) * (V2.dy - V1.dy) + (V2.dx - V1.dx) * (V2.dx - V1.dx));
+            return (float)Math.Abs(top / bottom);
+        }
+        //凸壳三角形剖分
+        private void CreateHullTriangle()
+        {
+            IList<int> tempVec = hullPoints;
+            int id1 = -1, id2 = -1, id3 = -1;
+            while (tempVec.Count >= 3)
+            {
+                int tempSize = tempVec.Count;
+                for (int i = 0; i < tempSize; ++i)
+                {
+                    //干净则加入网中
+                    id1 = tempVec[i % tempSize];
+                    id2 = tempVec[(i + 1) % tempSize];
+                    id3 = tempVec[(i + 2) % tempSize];
+                    if (IsCleanTriangle(id1, id2, id3))
+                    {
+                        DTriangle tri = new DTriangle(id1, id2, id3);
+                        _triangles.Add(tri);
+
+                        _vertices[id2].isHullVertex = 2;//标记为构三角网节点中间点
+                        tempVec.RemoveAt((i + 1) % tempSize);//去除中间点！！！
+                        break;
+                    }
+                }
+            }
+        }
+
+        //
+        private bool IsCleanTriangle(int id1, int id2, int id3)
+        {
+
+        }
+        //判断三点共直线，x3,y3为判断点
+        private bool JudgeInLine(float x1, float y1, float x2, float y2, float x3, float y3)
+        {
+            float res = (x3 - x1) * (y2 - y1) - (x2 - x1) * (y3 - y1);
+            if (res == 0.0f)
+                return true;
+            return false;
+        }
+        //求外接圆的圆心-2维
+        bool GetTriangleBarycnt(float x1, float y1, float x2, float y2, float x3, float y3, float BaryCntX, float BaryCntY)
+        {
+            float k1, k2; //两条中垂线斜率
+
+            //三点共线
+            if (JudgeInLine(x1, y1, x2, y2, x3, y3))
+                return false;
+
+            //边的中点，使用直线方程斜率计算
+            float MidX1 = (x1 + x2) / 2;
+            float MidY1 = (y1 + y2) / 2;
+            float MidX2 = (x2 + x3) / 2;
+            float MidY2 = (y2 + y3) / 2;
+            if (Math.Abs(y2 - y1) < precision) //p1p2平行于X轴
+            {
+                k2 = -(x3 - x2) / (y3 - y2);
+                BaryCntX = MidX1;
+                BaryCntY = k2 * (BaryCntX - MidX2) + MidY2;
+            }
+            else if (Math.Abs(y3 - y2) < precision) //p2p3平行于X轴
+            {
+                k1 = -(x2 - x1) / (y2 - y1);
+                BaryCntX = MidX2;
+                BaryCntY = k1 * (BaryCntX - MidX1) + MidY1;
+            }
+            else
+            {//二元一次方程
+                k1 = -(x2 - x1) / (y2 - y1);
+                k2 = -(x3 - x2) / (y3 - y2);
+                BaryCntX = (k1 * MidX1 - k2 * MidX2 + MidY2 - MidY1) / (k1 - k2);
+                BaryCntY = k1 * (BaryCntX - MidX1) + MidY1;
+            }
+            return true;
+        }
+
+
+        #endregion
+
 
         private Graphics GetGraphics()
         {
@@ -180,7 +376,7 @@ namespace ConstraintTriangles
             Array.ForEach<DVertex>(_vertices.ToArray(), vertex => arrP.Add(new Point(vertex.dx, vertex.dy)));
             return arrP.ToArray();
         }
-        #endregion
+
 
     }
 }
