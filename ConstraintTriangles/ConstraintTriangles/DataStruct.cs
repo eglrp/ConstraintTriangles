@@ -103,11 +103,11 @@ namespace ConstraintTriangles
         public int dTriangle_index2;//首点索引 
         public int dTriangle_index3;//首点索引 
 
-        bool isDelete;//标志在三角形集合中是否被删除-----暂定使用
+        public bool isDelete;//标志在三角形集合中是否被删除-----暂定使用
 
-        bool edge1_isHull;//(v1,v2)判断当前的边是否为凸壳的边
-        bool edge2_isHull;//(v1,v2)
-        bool edge3_isHull;//(v1,v2)
+        public bool edge1_isHull;//(v1,v2)判断当前的边是否为凸壳的边
+        public bool edge2_isHull;//(v1,v2)
+        public bool edge3_isHull;//(v1,v2)
 
         public int AdjDTriangleIndex1;//edge1的邻近三角形索引
         public int AdjDTriangleIndex2;

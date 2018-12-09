@@ -30,6 +30,9 @@ namespace ConstraintTriangles
         private IList<DEdge> insideEdges;
         private IList<int> hullPoints;//初始外包矩形索引
         private IList<int> hullPoints_copy;
+
+        private IList<int> cFirstVertexIndex_Stack;//用来存储交换首节点
+        bool joinFlag;				//用来标志是否进行了初始约束线顶点交换
         public MainForm()
         {
             InitializeComponent();
@@ -41,7 +44,8 @@ namespace ConstraintTriangles
             hullPoints = new List<int>();
             hullPoints_copy = new List<int>();
             outsideEdges = new List<DEdge>();
-            insideEdges = new List<DEdge>()
+            insideEdges = new List<DEdge>();
+            cFirstVertexIndex_Stack = new List<int>();
 
             this.btn_StartTriangle.Click += btn_StartTriangle_Click;
             this.btn_Clear.Click += btn_Clear_Click;
@@ -371,54 +375,169 @@ namespace ConstraintTriangles
         //删除多余的三角形
         void RemoveSuperfluousEdge()
         {
-            	IList<DEdge> vecTemp=ReturnNoExisitHullEdge(outsideEdges);
-	ConstructAllTriangleProperty();
-	ConstructAllEdgeProperty();
-	//为集合中的外包边建立约束
-	for(int m=0;m<vecTemp.Count;++m)
-	{
-		GetDelaunayByHullLine(vecTemp.at(m));
-	}
-	insideEdges.clear();
-	bool isInFlag1,isInFlag2,isInFlag3;
-	for(size_t i=0;i<DTraingles.size();++i)
-	{
-		isInFlag1=isInFlag2=isInFlag3=true;
-		DTraingles.at(i).edge1_isHull=ExistEdge(staticOutsideEdges,DTraingles.at(i).dTriangle_index1,DTraingles.at(i).dTriangle_index2);
-		DTraingles.at(i).edge2_isHull=ExistEdge(staticOutsideEdges,DTraingles.at(i).dTriangle_index2,DTraingles.at(i).dTriangle_index3);
-		DTraingles.at(i).edge3_isHull=ExistEdge(staticOutsideEdges,DTraingles.at(i).dTriangle_index3,DTraingles.at(i).dTriangle_index1);
+            IList<DEdge> vecTemp = ReturnNoExisitHullEdge(outsideEdges);
+            ConstructAllTriangleProperty();
+            ConstructAllEdgeProperty();
+            //为集合中的外包边建立约束
+            for (int m = 0; m < vecTemp.Count; ++m)
+            {
+                GetDelaunayByHullLine(vecTemp[m]);
+            }
+            insideEdges.Clear();
+            bool isInFlag1, isInFlag2, isInFlag3;
+            for (int i = 0; i < _triangles.Count; ++i)
+            {
+                isInFlag1 = isInFlag2 = isInFlag3 = true;
+                _triangles[i].edge1_isHull = ExistEdge(outsideEdges, _triangles[i].dTriangle_index1, _triangles[i].dTriangle_index2);
+                _triangles[i].edge2_isHull = ExistEdge(outsideEdges, _triangles[i].dTriangle_index2, _triangles[i].dTriangle_index3);
+                _triangles[i].edge3_isHull = ExistEdge(outsideEdges, _triangles[i].dTriangle_index3, _triangles[i].dTriangle_index1);
 
-		if(!DTraingles.at(i).edge1_isHull)//非外包边
-		{//12
-			isInFlag1=InPolygon(DVertices.at(DTraingles.at(i).dTriangle_index1).dx,DVertices.at(DTraingles.at(i).dTriangle_index1).dy,DVertices.at(DTraingles.at(i).dTriangle_index2).dx,DVertices.at(DTraingles.at(i).dTriangle_index2).dy,hullDVertices_Origin);
-		}
-		if(!DTraingles.at(i).edge2_isHull)
-		{//23
-			isInFlag2=InPolygon(DVertices.at(DTraingles.at(i).dTriangle_index2).dx,DVertices.at(DTraingles.at(i).dTriangle_index2).dy,DVertices.at(DTraingles.at(i).dTriangle_index3).dx,DVertices.at(DTraingles.at(i).dTriangle_index3).dy,hullDVertices_Origin);
-		}
-		if(!DTraingles.at(i).edge3_isHull)
-		{//31
-			isInFlag3=InPolygon(DVertices.at(DTraingles.at(i).dTriangle_index3).dx,DVertices.at(DTraingles.at(i).dTriangle_index3).dy,DVertices.at(DTraingles.at(i).dTriangle_index1).dx,DVertices.at(DTraingles.at(i).dTriangle_index1).dy,hullDVertices_Origin);
-		}
-		if(isInFlag1&&isInFlag2&&isInFlag3)
-			DTraingles.at(i).isDelete=false;
-		else 
-			DTraingles.at(i).isDelete=true;
-	}
-	//剔除掉标记为delete的三角形
-	vector<DTraingle>::const_iterator iter=DTraingles.cbegin();
-	while(iter!=DTraingles.cend())
-	{
-		if(iter->isDelete)
-		{
-			iter = DTraingles.erase(iter);
-		}
-		else 
-			++iter;
-	}
-	ConstructTriangleProperty(staticOutsideEdges);
-	ConstructEdgeProperty(staticOutsideEdges);
+                if (!_triangles[i].edge1_isHull)//非外包边
+                {//12
+                    isInFlag1 = InPolygon(_vertices[_triangles[i].dTriangle_index1].dx,
+        _vertices[_triangles[i].dTriangle_index1].dy, _vertices[_triangles[i].dTriangle_index2].dx, _vertices[_triangles[i].dTriangle_index2].dy, hullVertices);
+                }
+                if (!_triangles[i].edge2_isHull)
+                {//23
+                    isInFlag2 = InPolygon(_vertices[_triangles[i].dTriangle_index2].dx, _vertices[_triangles[i].dTriangle_index2].dy, _vertices[_triangles[i].dTriangle_index3].dx, _vertices[_triangles[i].dTriangle_index3].dy, hullVertices);
+                }
+                if (!_triangles[i].edge3_isHull)
+                {//31
+                    isInFlag3 = InPolygon(_vertices[_triangles[i].dTriangle_index3].dx, _vertices[_triangles[i].dTriangle_index3].dy, _vertices[_triangles[i].dTriangle_index1].dx, _vertices[_triangles[i].dTriangle_index1].dy, hullVertices);
+                }
+                if (isInFlag1 && isInFlag2 && isInFlag3)
+                    _triangles[i].isDelete = false;
+                else
+                    _triangles[i].isDelete = true;
+            }
+            //剔除掉标记为delete的三角形
+
+            _triangles = _triangles.Where(t => t.isDelete == false).ToList();
+            ConstructTriangleProperty(outsideEdges);
+            ConstructEdgeProperty(outsideEdges);
         }
+
+        private void ConstructTriangleProperty(IList<DEdge> edges)
+        {
+            for (int i = 0; i < _triangles.Count; ++i)
+            {
+                //有些冗余(该方法需要重复利用，冗余也加上)
+                _triangles[i].edge1_isHull = ExistEdge(edges, _triangles[i].dTriangle_index1, _triangles[i].dTriangle_index2);
+                _triangles[i].edge2_isHull = ExistEdge(edges, _triangles[i].dTriangle_index2, _triangles[i].dTriangle_index3);
+                _triangles[i].edge3_isHull = ExistEdge(edges, _triangles[i].dTriangle_index3, _triangles[i].dTriangle_index1);
+                _triangles[i].AdjDTriangleIndex1 = -1;
+                _triangles[i].AdjDTriangleIndex2 = -1;
+                _triangles[i].AdjDTriangleIndex3 = -1;
+                for (int j = 0; j < _triangles.Count; ++j)
+                {
+                    if (i != j)
+                    {
+                        if (!_triangles[i].edge1_isHull)
+                        {
+                            if (CompareEdge(_triangles[i].dTriangle_index1, _triangles[i].dTriangle_index2, _triangles[j].dTriangle_index1, _triangles[j].dTriangle_index2) ||
+                                CompareEdge(_triangles[i].dTriangle_index1, _triangles[i].dTriangle_index2, _triangles[j].dTriangle_index2, _triangles[j].dTriangle_index3) ||
+                                CompareEdge(_triangles[i].dTriangle_index1, _triangles[i].dTriangle_index2, _triangles[j].dTriangle_index3, _triangles[j].dTriangle_index1))
+                                _triangles[i].AdjDTriangleIndex1 = j;
+                        }
+                        if (!_triangles[i].edge2_isHull)
+                        {
+                            if (CompareEdge(_triangles[i].dTriangle_index2, _triangles[i].dTriangle_index3, _triangles[j].dTriangle_index1, _triangles[j].dTriangle_index2) ||
+                                CompareEdge(_triangles[i].dTriangle_index2, _triangles[i].dTriangle_index3, _triangles[j].dTriangle_index2, _triangles[j].dTriangle_index3) ||
+                                CompareEdge(_triangles[i].dTriangle_index2, _triangles[i].dTriangle_index3, _triangles[j].dTriangle_index3, _triangles[j].dTriangle_index1))
+                                _triangles[i].AdjDTriangleIndex2 = j;
+                        }
+                        if (!_triangles[i].edge3_isHull)
+                        {
+                            if (CompareEdge(_triangles[i].dTriangle_index3, _triangles[i].dTriangle_index1, _triangles[j].dTriangle_index1, _triangles[j].dTriangle_index2) ||
+                                CompareEdge(_triangles[i].dTriangle_index3, _triangles[i].dTriangle_index1, _triangles[j].dTriangle_index2, _triangles[j].dTriangle_index3) ||
+                                CompareEdge(_triangles[i].dTriangle_index3, _triangles[i].dTriangle_index1, _triangles[j].dTriangle_index3, _triangles[j].dTriangle_index1))
+                                _triangles[i].AdjDTriangleIndex3 = j;
+                        }
+                    }
+                }
+            }
+        }
+
+        private void ConstructEdgeProperty(IList<DEdge> edges)
+{
+	insideEdges.Clear();
+	for(int i =0;i<_triangles.Count;++i)
+	{
+		//12
+		if(!_triangles[i].edge1_isHull)
+		{
+			DEdge edge = new DEdge(_triangles[i].dTriangle_index1,_triangles[i].dTriangle_index2);
+			edge.AdjDTriangle1_index=i;
+			edge.AdjDTriangle2_index=_triangles[i].AdjDTriangleIndex1;
+
+			int index=ExistEdgeIndex(insideEdges,edge.dEdge_index1,edge.dEdge_index2);
+			if(index!=-1)
+			{
+				insideEdges[index].AdjDTriangle1_index=i;
+				insideEdges[index].AdjDTriangle2_index=_triangles[i].AdjDTriangleIndex1;
+			}
+			else
+				insideEdges.Add(edge);
+		}
+		else 
+		{
+			int index=ExistEdgeIndex(edges,_triangles[i].dTriangle_index1,_triangles[i].dTriangle_index2);
+			edges[index].AdjDTriangle1_index=i;
+			edges[index].AdjDTriangle2_index=-1;
+			edges[index].isHullEdge=true;
+		}
+		//23
+		if(!_triangles[i].edge2_isHull)
+		{
+			DEdge edge = new DEdge(_triangles[i].dTriangle_index2,_triangles[i].dTriangle_index3);
+			edge.AdjDTriangle1_index=i;
+			edge.AdjDTriangle2_index=_triangles[i].AdjDTriangleIndex2;
+
+			int index=ExistEdgeIndex(insideEdges,edge.dEdge_index1,edge.dEdge_index2);
+			if(index!=-1)
+			{
+				insideEdges[index].AdjDTriangle1_index=i;
+				insideEdges[index].AdjDTriangle2_index=_triangles[i].AdjDTriangleIndex2;
+			}
+			else
+				insideEdges.Add(edge);
+		}
+		else 
+		{
+			int index=ExistEdgeIndex(edges,_triangles[i].dTriangle_index2,_triangles[i].dTriangle_index3);
+			edges[index].AdjDTriangle1_index=i;
+			edges[index].AdjDTriangle2_index=-1;
+			edges[index].isHullEdge=true;
+		}
+		//31
+		if(!_triangles[i].edge3_isHull)
+		{
+			DEdge edge = new DEdge (_triangles[i].dTriangle_index3,_triangles[i].dTriangle_index1);
+			edge.AdjDTriangle1_index=i;
+			edge.AdjDTriangle2_index=_triangles[i].AdjDTriangleIndex3;
+
+			int index=ExistEdgeIndex(insideEdges,edge.dEdge_index1,edge.dEdge_index2);
+			if(index!=-1)
+			{
+				insideEdges[index].AdjDTriangle1_index=i;
+				insideEdges[index].AdjDTriangle2_index=_triangles[i].AdjDTriangleIndex3;
+			}
+			else
+				insideEdges.Add(edge);
+		}
+		else 
+		{
+			int index=ExistEdgeIndex(edges,_triangles[i].dTriangle_index3,_triangles[i].dTriangle_index1);
+			edges[index].AdjDTriangle1_index=i;
+			edges[index].AdjDTriangle2_index=-1;
+			edges[index].isHullEdge=true;
+		}
+	}
+	//合并内外边
+        _edges = edges.Concat(insideEdges).ToList();
+}
+
+
         private IList<DEdge> ReturnNoExisitHullEdge(IList<DEdge> edges)
         {
             IList<DEdge> vecTemp = new List<DEdge>();
@@ -561,10 +680,365 @@ namespace ConstraintTriangles
             return index;
         }
 
+        private bool GetDelaunayByHullLine(DEdge edge)
+        {
+            cFirstVertexIndex_Stack.Clear();
+            //int refFirstIndex = -1;//保存约束线的首节点--如果是连续多个置换首节点的话会出现bug，此处暂时弃用，因为连续出现多个置换首节点的情况并没有测试
+            int curFirstIndex = -1;//保存当前的约束首节点
+            int curLastIndex = -1;//保存当前的约束尾节点
+            int oppsitePt = -1;//与当前约束线相交的内部线段的对点
+
+            curFirstIndex = edge.dEdge_index1;
+            curLastIndex = edge.dEdge_index2;
+            while (oppsitePt != curLastIndex)
+            {
+                int firstIntersectEdge_Triangle_Index = -1;//返回首节点与首交边所在的三角形
+                int firstIntersectEdgeIndex = FindIntersectEdgeFromVert(curFirstIndex, edge, firstIntersectEdge_Triangle_Index);//返回首相交边的内部索引
+                if (firstIntersectEdgeIndex == -1)
+                {
+                    return false;//不做再次约束处理，因为凸壳算法出现了问题，使用修改后的凸壳算法应该解决了问题，程序不应该进入该语句~
+                }
+                else
+                {//找到相交的首边
+                    int adjTri1 = insideEdges[firstIntersectEdgeIndex].AdjDTriangle1_index;
+                    int adjTri2 = insideEdges[firstIntersectEdgeIndex].AdjDTriangle2_index;
+                    int oppTri = -1;//对边三角形
+                    if (adjTri1 == firstIntersectEdge_Triangle_Index)
+                    {
+                        oppTri = adjTri2;
+                    }
+                    else if (adjTri2 == firstIntersectEdge_Triangle_Index)
+                    {
+                        oppTri = adjTri1;
+                    }
+                    else if (oppTri == -1)
+                    {
+                        MessageBox.Show("GetDelaunayByHullLine内部边处理~对边三角形未找到，出bug了~");
+                        return false;
+                    }
+                    DTriangle dt = _triangles[oppTri];
+                    DEdge firstEdge = insideEdges[firstIntersectEdgeIndex];
+                    oppsitePt = ReturnOppositeVertex(dt, firstEdge);
+
+                    #region 对边三角形对点是约束线终点
+
+                    if (oppsitePt == curLastIndex)//终点
+                    {
+                        insideEdges.RemoveAt(firstIntersectEdgeIndex);
+                        //删除三角形，注意集合的索引
+                        if (adjTri1 > adjTri2)
+                        {
+                            _triangles.RemoveAt(adjTri1);
+                            _triangles.RemoveAt(adjTri2);
+                        }
+                        else
+                        {
+                            _triangles.RemoveAt(adjTri2);
+                            _triangles.RemoveAt(adjTri1);
+                        }
+                        DEdge newEdge = new DEdge(curFirstIndex, oppsitePt);//新对角线
+                        //新三角形
+                        DTriangle tri1 = new DTriangle(curFirstIndex, firstEdge.dEdge_index1, oppsitePt);
+                        DTriangle tri2 = new DTriangle(curFirstIndex, firstEdge.dEdge_index2, oppsitePt);
+                        _triangles.Add(tri1);
+                        newEdge.AdjDTriangle1_index = _triangles.Count - 1;
+                        _triangles.Add(tri2);
+                        newEdge.AdjDTriangle1_index = _triangles.Count - 1;
+
+                        insideEdges.Add(newEdge);
+                        //重新计算邻接属性
+                        ConstructAllTriangleProperty();
+                        ConstructAllEdgeProperty();
+                        if (joinFlag)
+                        {//重新获取上一个首节点
+                            joinFlag = false;
+                            int firstIndex = cFirstVertexIndex_Stack[0];
+                            cFirstVertexIndex_Stack.RemoveAt(0);
+                            if (firstIndex == curFirstIndex)
+                            {
+                                curFirstIndex = cFirstVertexIndex_Stack[0];
+                                cFirstVertexIndex_Stack.RemoveAt(0);
+                            }
+                            else
+                                curFirstIndex = firstIndex;
+                            oppsitePt = -1;
+                            continue;
+                        }
+                        else
+                            break;
+                    }
+
+                    #endregion
+
+                    #region 对边三角形对点不是约束线终点
+                    else
+                    {
+                        //栈为空或者栈首元素与当前的首节点索引不同
+                        if (cFirstVertexIndex_Stack.Count == 0 || cFirstVertexIndex_Stack[0] != curFirstIndex)
+                            cFirstVertexIndex_Stack.Insert(0, curFirstIndex);
+
+                        DTriangle dt1 = new DTriangle(curFirstIndex, firstEdge.dEdge_index1, oppsitePt);
+                        DTriangle dt2 = new DTriangle(curFirstIndex, firstEdge.dEdge_index2, oppsitePt);
+
+                        float clockwise1 = IsClockwise(_vertices, dt1);
+                        float clockwise2 = IsClockwise(_vertices, dt2);
+                        if (clockwise1 * clockwise2 == 0)
+                        {
+                            MessageBox.Show("内部边~三点共线，暂时未处理~");
+                            return false;
+                        }
+                        else if (clockwise1 > 0 && clockwise2 > 0)//同时为正，逆时针
+                        {
+                            //谁在内部谁是置换后的首节点
+                            if (PointInTriangle(_vertices, curFirstIndex, firstEdge.dEdge_index1, oppsitePt, firstEdge.dEdge_index2))
+                                curFirstIndex = firstEdge.dEdge_index2;
+                            else
+                                curFirstIndex = firstEdge.dEdge_index1;
+                            joinFlag = true;
+                        }
+                        else if (clockwise1 < 0 && clockwise2 < 0)//同时为负，顺时针
+                        {
+                            //谁在内部谁是置换后的首节点
+                            if (PointInTriangle(_vertices, curFirstIndex, firstEdge.dEdge_index1, oppsitePt, firstEdge.dEdge_index2))
+                                curFirstIndex = firstEdge.dEdge_index2;
+                            else
+                                curFirstIndex = firstEdge.dEdge_index1;
+                            joinFlag = true;
+                        }
+                        else//一正一负，正好在约束线的两侧
+                        {
+                            //交对角线，删除原对角线（内边）
+                            insideEdges.RemoveAt(firstIntersectEdgeIndex);
+                            //删除三角形，注意集合的索引
+                            if (adjTri1 > adjTri2)
+                            {
+                                _triangles.RemoveAt(adjTri1);
+                                _triangles.RemoveAt(adjTri2);
+                            }
+                            else
+                            {
+                                _triangles.RemoveAt(adjTri2);
+                                _triangles.RemoveAt(adjTri1);
+                            }
+                            DEdge newEdge = new DEdge(curFirstIndex, oppsitePt);//新对角线
+                            //新三角形
+                            DTriangle tri1 = new DTriangle(curFirstIndex, firstEdge.dEdge_index1, oppsitePt);
+                            DTriangle tri2 = new DTriangle(curFirstIndex, firstEdge.dEdge_index2, oppsitePt);
+                            _triangles.Add(tri1);
+                            newEdge.AdjDTriangle1_index = _triangles.Count - 1;
+                            _triangles.Add(tri2);
+                            newEdge.AdjDTriangle2_index = _triangles.Count - 1;
+
+                            insideEdges.Add(newEdge);
+                            //重新计算邻接属性
+                            ConstructAllTriangleProperty();
+                            ConstructAllEdgeProperty();
+                        }
+                        continue;
+                    }
+                    #endregion
+
+                }
+            }
+            return true;
+        }
+        //根据约束点找到相交的边首边
+        private int FindIntersectEdgeFromVert(int vertIndex, DEdge ee, int triIndex)
+        {
+            int edgeIndex = -1;
+            triIndex = -1;
+            DEdge e = null;//临时边
+            for (int i = 0; i < _triangles.Count; ++i)
+            {
+                ++triIndex;
+                if (IsConstructTriangle(_triangles[i], vertIndex, ref e))
+                {
+                    if (EdgeIntersectMid(_vertices, ee, e))
+                    {
+                        edgeIndex = ExistEdgeIndex(insideEdges, e.dEdge_index1, e.dEdge_index2);
+                        return edgeIndex;
+                    }
+                }
+            }
+            return edgeIndex;
+        }
+
+        //两边相交于中间（非两端点）
+        private bool EdgeIntersectMid(IList<DVertex> vertices, DEdge e1, DEdge e2)
+        {
+            float u, v, w, z;
+            DVertex a = vertices[e1.dEdge_index1];
+            DVertex b = vertices[e1.dEdge_index2];
+            DVertex c = vertices[e2.dEdge_index1];
+            DVertex d = vertices[e2.dEdge_index2];
+
+            u = (c.dx - a.dx) * (b.dy - a.dy) - (b.dx - a.dx) * (c.dy - a.dy);
+            v = (d.dx - a.dx) * (b.dy - a.dy) - (b.dx - a.dx) * (d.dy - a.dy);
+            w = (a.dx - c.dx) * (d.dy - c.dy) - (d.dx - c.dx) * (a.dy - c.dy);
+            z = (b.dx - c.dx) * (d.dy - c.dy) - (d.dx - c.dx) * (b.dy - c.dy);
+            if (u * v <= precision && w * z <= precision)
+            {
+                if (EdgeIntersectVert(e1, e2))
+                    return false;
+                return true;
+            }
+            return false;
+        }
+        //两条边相交于一个顶点
+        private bool EdgeIntersectVert(DEdge e1, DEdge e2)
+        {
+            if ((e1.dEdge_index1 == e2.dEdge_index1 && e1.dEdge_index2 != e2.dEdge_index2) || (e1.dEdge_index2 == e2.dEdge_index1 && e1.dEdge_index1 != e2.dEdge_index2) || (e1.dEdge_index1 != e2.dEdge_index1 && e1.dEdge_index2 == e2.dEdge_index2) || (e1.dEdge_index2 != e2.dEdge_index1 && e1.dEdge_index1 == e2.dEdge_index2))
+                return true;
+            return false;
+        }
+
+        //指定的点是否构成指定三角形,返回对边
+        private bool IsConstructTriangle(DTriangle triangle, int vertIndex, ref DEdge e)
+        {
+            if (vertIndex == triangle.dTriangle_index1)
+            {
+                DEdge e1 = new DEdge(triangle.dTriangle_index2, triangle.dTriangle_index3);
+                e = e1;
+                return true;
+            }
+            else if (vertIndex == triangle.dTriangle_index2)
+            {
+                DEdge e2 = new DEdge(triangle.dTriangle_index3, triangle.dTriangle_index1);
+                e = e2;
+                return true;
+            }
+            else if (vertIndex == triangle.dTriangle_index3)
+            {
+                DEdge e3 = new DEdge(triangle.dTriangle_index1, triangle.dTriangle_index2);
+                e = e3;
+                return true;
+            }
+            return false;
+        }
+
+        //返回不属于边上的对点
+        private int ReturnOppositeVertex(DTriangle dt, DEdge edge)
+        {
+            if (dt.dTriangle_index1 == edge.dEdge_index1 || dt.dTriangle_index1 == edge.dEdge_index2)
+            {
+                if (dt.dTriangle_index2 == edge.dEdge_index1 || dt.dTriangle_index2 == edge.dEdge_index2)
+                {
+                    return dt.dTriangle_index3;
+                }
+                else
+                    return dt.dTriangle_index2;
+            }
+            else
+                return dt.dTriangle_index1;
+        }
+
+        //计算三角形顺时针逆时针--小于零顺时针，大于零逆时针，等于零三点共线
+        private float IsClockwise(IList<DVertex> vertices, DTriangle tri)
+        {
+            DVertex v1 = vertices[tri.dTriangle_index1];
+            DVertex v2 = vertices[tri.dTriangle_index2];
+            DVertex v3 = vertices[tri.dTriangle_index3];
+
+            return IsClockwise(v1, v2, v3);
+
+        }
+        private float IsClockwise(DVertex v1, DVertex v2, DVertex v3)
+        {
+            float ji = (float)(v2.dx - v1.dx) * (v3.dy - v1.dy) - (v2.dy - v1.dy) * (v3.dx - v1.dx);
+            return ji;
+        }
+
+        //计算三个点的叉积 //AB*AP
+        private bool VectorCross(IList<DVertex> vertices, int p1Index, int p2Index, int p3Index)
+        {
+            float res = (vertices[p2Index].dx - vertices[p1Index].dx) * (vertices[p3Index].dy - vertices[p1Index].dy) - (vertices[p2Index].dy - vertices[p1Index].dy) * (vertices[p3Index].dx - vertices[p1Index].dx);
+            if (res < precision)
+            {
+                //AfxMessageBox(_T("VectorCross计算叉积三点共线"));
+                return false;
+            }
+            return res > 0;
+        }
+        //计算点是否在三角形内，忽略了三点共线问题(因为使用的地方不会存在三点共线的三角形~)
+        private bool PointInTriangle(IList<DVertex> vertices, int p1, int p2, int p3, int p)
+        {
+            bool res = VectorCross(vertices, p1, p2, p);
+            if (res != VectorCross(vertices, p2, p3, p))
+                return false;
+            if (res != VectorCross(vertices, p3, p1, p))
+                return false;
+            return true;
+        }
 
 
+        private bool InPolygon(float x1, float y1, float x2, float y2, IList<DVertex> vertex)
+        {
+            //边的中点
+            float MidX = (x1 + x2) / 2;
+            float MidY = (y1 + y2) / 2;
 
+            bool isIn = InPolygon(MidX, MidY, vertex);
+            return isIn;
+        }
 
+        private bool InPolygon(float x, float y, IList<DVertex> vertex)
+        {
+            //采用射线法，直线射向右边，要考虑其中的特殊情况
+            int count = 0;
+            //只考虑多边形外部环，内部不考虑,//下面减2的是因为面存储的最后一个点与第一个点相同
+            int size = vertex.Count;
+            for (int i = 0; i < size; ++i)
+            {
+                int j = (i + 1) % size;//2
+                int k = (i + 2) % size;//3
+
+                float y_1 = vertex[i].dy;
+                float y_2 = vertex[j].dy;
+                float x_1 = vertex[i].dx;
+                float x_2 = vertex[j].dx;
+                //去除与向右的射线不可能相交的上下线段，加速响应时间
+                if (y < Math.Min(y_1, y_2) || y > Math.Max(y_1, y_2))
+                    continue;
+                //射线向右，把左边的排出一些（部分，不是所有），加速响应时间
+                if (x > Math.Max(x_1, x_2))
+                    continue;
+                //以下是处理射线与边相交（始终以i+1为出发点）----------------------
+                //第一种情况：射线与多边形边重合;
+                //--与射线平行不重合的情形在之前就已被排除，
+                //--与射线重合但在射线左边的边也在前面被排除
+                if (y_1 == y_2)
+                    continue;
+                else  //正常情况下
+                {
+                    float CrossX = x_2 + (x_1 - x_2) * (y - y_2) / (y_1 - y_2);//交点X
+
+                    //处理特殊情况：射线相交于交点
+                    if (x <= CrossX)
+                    {
+                        if (x == CrossX)//线上
+                        {
+                            count = 1;
+                            break;
+                        }
+                        else if (y == y_2 && CrossX == x_2)//交于第二个交点（第一个交点会循环回去）
+                        {
+                            if ((y_2 > Math.Min(y_1, vertex[k].dy) && y_2 < Math.Max(y_1, vertex[k].dy)))//？
+                            {//如果交点i+1在i及i+2点的两侧
+                                count++;
+                                i++;
+                            }//else 在同侧则不纳入计数
+                        }
+                        else
+                        {
+                            count++;
+                        }
+                    }
+                }
+
+            }//end for
+            bool isIn = (count % 2 == 1);
+            return isIn;
+        }
         private bool IsCleanTriangle(int id1, int id2, int id3)
         {
             for (int i = 0; i < hullPoints.Count; ++i)
@@ -638,7 +1112,7 @@ namespace ConstraintTriangles
         }
         #endregion
 
-
+        //-----------------外部方法---------------
         private Graphics GetGraphics()
         {
             if (g == null)
