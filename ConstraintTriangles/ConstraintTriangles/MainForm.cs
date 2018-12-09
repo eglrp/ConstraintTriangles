@@ -27,6 +27,7 @@ namespace ConstraintTriangles
 
         private IList<DVertex> hullVertices;//初始外包
         private IList<DEdge> outsideEdges;//外包边
+        private IList<DEdge> insideEdges;
         private IList<int> hullPoints;//初始外包矩形索引
         private IList<int> hullPoints_copy;
         public MainForm()
@@ -40,6 +41,7 @@ namespace ConstraintTriangles
             hullPoints = new List<int>();
             hullPoints_copy = new List<int>();
             outsideEdges = new List<DEdge>();
+            insideEdges = new List<DEdge>()
 
             this.btn_StartTriangle.Click += btn_StartTriangle_Click;
             this.btn_Clear.Click += btn_Clear_Click;
@@ -100,6 +102,8 @@ namespace ConstraintTriangles
         {
             CreateConvex();
             CreateHullTriangle();
+            InsertOtherVertex();
+            RemoveSuperfluousEdge();
         }
         //计算delaunay三角网
         private void CreateConvex()
@@ -311,13 +315,262 @@ namespace ConstraintTriangles
             }
         }
 
-        //
+        //逐点插入其它点构TIN
+        private void InsertOtherVertex()
+        {
+            IList<DEdge> edgesBuf = new List<DEdge>();
+            bool isInCircle = false;
+            for (int i = 0; i < _vertices.Count; ++i)
+            {
+                if (_vertices[i].isHullVertex != 0)
+                    continue;//去除凸壳点
+                edgesBuf.Clear();
+                for (int j = 0; j < _triangles.Count; ++j)
+                {
+                    isInCircle = InTriangleExtCircle(_vertices[i].dx, _vertices[i].dy, _vertices[_triangles[j].dTriangle_index1].dx, _vertices[_triangles[j].dTriangle_index1].dy, _vertices[_triangles[j].dTriangle_index2].dx, _vertices[_triangles[j].dTriangle_index2].dy, _vertices[_triangles[j].dTriangle_index3].dx, _vertices[_triangles[j].dTriangle_index3].dy);
+                    if (isInCircle)//当前的点在约束三角形内
+                    {
+                        IList<DEdge> vecTemp = new List<DEdge>();
+                        DEdge edge1 = new DEdge(_triangles[j].dTriangle_index1, _triangles[j].dTriangle_index2);
+                        DEdge edge2 = new DEdge(_triangles[j].dTriangle_index2, _triangles[j].dTriangle_index3);
+                        DEdge edge3 = new DEdge(_triangles[j].dTriangle_index3, _triangles[j].dTriangle_index1);
+                        vecTemp.Add(edge1);
+                        vecTemp.Add(edge2);
+                        vecTemp.Add(edge3);
+                        //存储除公共边外的三角形边
+                        bool isNotCommonEdge;
+                        for (int k = 0; k < 3; ++k)
+                        {
+                            isNotCommonEdge = true;
+                            for (int n = 0; n < edgesBuf.Count; ++n)
+                            {
+                                if (vecTemp[k] == edgesBuf[n])//如果为公共边
+                                {
+                                    edgesBuf[n] = edgesBuf[edgesBuf.Count - 1];
+                                    edgesBuf.RemoveAt(edgesBuf.Count - 1);//删除公共边
+                                    isNotCommonEdge = false;
+                                    break;
+                                }
+                            }
+                            if (isNotCommonEdge)
+                                edgesBuf.Add(vecTemp[k]);
+                        }
+                        _triangles[j] = _triangles[_triangles.Count - 1];
+                        _triangles.RemoveAt(_triangles.Count - 1);//删除当前无效三角形
+                        --j;
+                    }
+                }
+                //构建新的三角形
+                for (int j = 0; j < edgesBuf.Count; ++j)
+                {
+                    DTriangle tri = new DTriangle(edgesBuf[j].dEdge_index1, edgesBuf[j].dEdge_index2, i);
+                    _triangles.Add(tri);
+                }
+            }
+        }
+        //删除多余的三角形
+        void RemoveSuperfluousEdge()
+        {
+            	IList<DEdge> vecTemp=ReturnNoExisitHullEdge(outsideEdges);
+	ConstructAllTriangleProperty();
+	ConstructAllEdgeProperty();
+	//为集合中的外包边建立约束
+	for(int m=0;m<vecTemp.Count;++m)
+	{
+		GetDelaunayByHullLine(vecTemp.at(m));
+	}
+	insideEdges.clear();
+	bool isInFlag1,isInFlag2,isInFlag3;
+	for(size_t i=0;i<DTraingles.size();++i)
+	{
+		isInFlag1=isInFlag2=isInFlag3=true;
+		DTraingles.at(i).edge1_isHull=ExistEdge(staticOutsideEdges,DTraingles.at(i).dTriangle_index1,DTraingles.at(i).dTriangle_index2);
+		DTraingles.at(i).edge2_isHull=ExistEdge(staticOutsideEdges,DTraingles.at(i).dTriangle_index2,DTraingles.at(i).dTriangle_index3);
+		DTraingles.at(i).edge3_isHull=ExistEdge(staticOutsideEdges,DTraingles.at(i).dTriangle_index3,DTraingles.at(i).dTriangle_index1);
+
+		if(!DTraingles.at(i).edge1_isHull)//非外包边
+		{//12
+			isInFlag1=InPolygon(DVertices.at(DTraingles.at(i).dTriangle_index1).dx,DVertices.at(DTraingles.at(i).dTriangle_index1).dy,DVertices.at(DTraingles.at(i).dTriangle_index2).dx,DVertices.at(DTraingles.at(i).dTriangle_index2).dy,hullDVertices_Origin);
+		}
+		if(!DTraingles.at(i).edge2_isHull)
+		{//23
+			isInFlag2=InPolygon(DVertices.at(DTraingles.at(i).dTriangle_index2).dx,DVertices.at(DTraingles.at(i).dTriangle_index2).dy,DVertices.at(DTraingles.at(i).dTriangle_index3).dx,DVertices.at(DTraingles.at(i).dTriangle_index3).dy,hullDVertices_Origin);
+		}
+		if(!DTraingles.at(i).edge3_isHull)
+		{//31
+			isInFlag3=InPolygon(DVertices.at(DTraingles.at(i).dTriangle_index3).dx,DVertices.at(DTraingles.at(i).dTriangle_index3).dy,DVertices.at(DTraingles.at(i).dTriangle_index1).dx,DVertices.at(DTraingles.at(i).dTriangle_index1).dy,hullDVertices_Origin);
+		}
+		if(isInFlag1&&isInFlag2&&isInFlag3)
+			DTraingles.at(i).isDelete=false;
+		else 
+			DTraingles.at(i).isDelete=true;
+	}
+	//剔除掉标记为delete的三角形
+	vector<DTraingle>::const_iterator iter=DTraingles.cbegin();
+	while(iter!=DTraingles.cend())
+	{
+		if(iter->isDelete)
+		{
+			iter = DTraingles.erase(iter);
+		}
+		else 
+			++iter;
+	}
+	ConstructTriangleProperty(staticOutsideEdges);
+	ConstructEdgeProperty(staticOutsideEdges);
+        }
+        private IList<DEdge> ReturnNoExisitHullEdge(IList<DEdge> edges)
+        {
+            IList<DEdge> vecTemp = new List<DEdge>();
+            for (int k = 0; k < edges.Count; ++k)
+            {
+                if (!EdgeConstructTriangle(edges[k]))
+                    vecTemp.Add(edges[k]);//将没有构成三角形的外包边保存下来
+            }
+            return vecTemp;
+        }
+        private bool EdgeConstructTriangle(DEdge edge)
+        {
+            for (int i = 0; i < _triangles.Count; ++i)
+            {
+                if (IsConstructTriangle(_triangles[i], edge.dEdge_index1) && IsConstructTriangle(_triangles[i], edge.dEdge_index2))
+                    return true;
+            }
+            return false;
+        }
+        private bool IsConstructTriangle(DTriangle triangle, int vertIndex)
+        {
+            if (vertIndex == triangle.dTriangle_index1)
+                return true;
+            else if (vertIndex == triangle.dTriangle_index2)
+                return true;
+            else if (vertIndex == triangle.dTriangle_index3)
+                return true;
+            return false;
+        }
+        private void ConstructAllTriangleProperty()
+        {
+            for (int i = 0; i < _triangles.Count; ++i)
+            {
+                for (int j = 0; j < _triangles.Count; ++j)
+                {
+                    if (i != j)
+                    {
+                        if (CompareEdge(_triangles[i].dTriangle_index1, _triangles[i].dTriangle_index2, _triangles[j].dTriangle_index1, _triangles[j].dTriangle_index2) || CompareEdge(_triangles[i].dTriangle_index1, _triangles[i].dTriangle_index2, _triangles[j].dTriangle_index2, _triangles[j].dTriangle_index3) || CompareEdge(_triangles[i].dTriangle_index1, _triangles[i].dTriangle_index2, _triangles[j].dTriangle_index3, _triangles[j].dTriangle_index1))
+                            _triangles[i].AdjDTriangleIndex1 = j;
+
+                        if (CompareEdge(_triangles[i].dTriangle_index2, _triangles[i].dTriangle_index3, _triangles[j].dTriangle_index1, _triangles[j].dTriangle_index2) || CompareEdge(_triangles[i].dTriangle_index1, _triangles[i].dTriangle_index2, _triangles[j].dTriangle_index2, _triangles[j].dTriangle_index3) || CompareEdge(_triangles[i].dTriangle_index1, _triangles[i].dTriangle_index2, _triangles[j].dTriangle_index3, _triangles[j].dTriangle_index1))
+                            _triangles[i].AdjDTriangleIndex2 = j;
+
+                        if (CompareEdge(_triangles[i].dTriangle_index3, _triangles[i].dTriangle_index1, _triangles[j].dTriangle_index1, _triangles[j].dTriangle_index2) || CompareEdge(_triangles[i].dTriangle_index1, _triangles[i].dTriangle_index2, _triangles[j].dTriangle_index2, _triangles[j].dTriangle_index3) || CompareEdge(_triangles[i].dTriangle_index1, _triangles[i].dTriangle_index2, _triangles[j].dTriangle_index3, _triangles[j].dTriangle_index1))
+                            _triangles[i].AdjDTriangleIndex3 = j;
+                    }
+                }
+            }
+        }
+
+        private bool CompareEdge(DEdge edge, int index1, int index2)
+        {
+            return CompareEdge(edge.dEdge_index1, edge.dEdge_index2, index1, index2);
+        }
+        private bool CompareEdge(int index_X1, int index_Y1, int index_X2, int index_Y2)
+        {
+            return ((index_X1 == index_X2) && (index_Y1 == index_Y2)) || ((index_X1 == index_Y2) && (index_Y1 == index_X2));
+        }
+        private void ConstructAllEdgeProperty()
+        {
+            for (int i = 0; i < _triangles.Count; ++i)
+            {
+                if (!ExistEdge(outsideEdges, _triangles[i].dTriangle_index1, _triangles[i].dTriangle_index2))
+                {
+                    //12
+                    DEdge edge = new DEdge(_triangles[i].dTriangle_index1, _triangles[i].dTriangle_index2);
+                    edge.AdjDTriangle1_index = i;
+                    edge.AdjDTriangle2_index = _triangles[i].AdjDTriangleIndex1;
+
+                    int index = ExistEdgeIndex(insideEdges, _triangles[i].dTriangle_index1, _triangles[i].dTriangle_index2);
+                    if (index != -1)
+                    {
+                        insideEdges[index].AdjDTriangle1_index = i;
+                        insideEdges[index].AdjDTriangle2_index = _triangles[i].AdjDTriangleIndex1;
+                    }
+                    else
+                        insideEdges.Add(edge);
+                }
+                if (!ExistEdge(outsideEdges, _triangles[i].dTriangle_index2, _triangles[i].dTriangle_index3))
+                {
+                    //23
+                    DEdge edge = new DEdge(_triangles[i].dTriangle_index2, _triangles[i].dTriangle_index3);
+                    edge.AdjDTriangle1_index = i;
+                    edge.AdjDTriangle2_index = _triangles[i].AdjDTriangleIndex2;
+
+                    int index = ExistEdgeIndex(insideEdges, edge.dEdge_index1, edge.dEdge_index2);
+                    if (index != -1)
+                    {
+                        insideEdges[index].AdjDTriangle1_index = i;
+                        insideEdges[index].AdjDTriangle2_index = _triangles[i].AdjDTriangleIndex2;
+                    }
+                    else
+                        insideEdges.Add(edge);
+                }
+                if (!ExistEdge(outsideEdges, _triangles[i].dTriangle_index3, _triangles[i].dTriangle_index1))
+                {
+                    //31
+                    DEdge edge = new DEdge(_triangles[i].dTriangle_index3, _triangles[i].dTriangle_index1);
+                    edge.AdjDTriangle1_index = i;
+                    edge.AdjDTriangle2_index = _triangles[i].AdjDTriangleIndex3;
+
+                    int index = ExistEdgeIndex(insideEdges, edge.dEdge_index1, edge.dEdge_index2);
+                    if (index != -1)
+                    {
+                        insideEdges[index].AdjDTriangle1_index = i;
+                        insideEdges[index].AdjDTriangle2_index = _triangles[i].AdjDTriangleIndex3;
+                    }
+                    else
+                        insideEdges.Add(edge);
+                }
+            }
+        }
+
+        private bool ExistEdge(IList<DEdge> edges, DEdge edge)
+        {
+            for (int i = 0; i < edges.Count; ++i)
+            {
+                if (edges[i] == edge)
+                    return true;
+            }
+            return false;
+        }
+        private bool ExistEdge(IList<DEdge> edges, int index1, int index2)
+        {
+            for (int i = 0; i < edges.Count; ++i)
+            {
+                if (CompareEdge(edges[i], index1, index2))
+                    return true;
+            }
+            return false;
+        }
+        private int ExistEdgeIndex(IList<DEdge> edges, int edgeIndex1, int edgeIndex2)
+        {
+            int index = -1;
+            for (int i = 0; i < edges.Count; ++i)
+            {
+                if (CompareEdge(edges[i], edgeIndex1, edgeIndex2))
+                    return i;
+            }
+            return index;
+        }
+
+
+
+
+
         private bool IsCleanTriangle(int id1, int id2, int id3)
         {
             for (int i = 0; i < hullPoints.Count; ++i)
             {
                 //跳过已构网的点和三角形顶点
-                if (_vertices[hullPoints[i]].isHullVertex == 2 || hullPoints[i] == id1 || hullPoints[i]== id2 || hullPoints[i] == id3)
+                if (_vertices[hullPoints[i]].isHullVertex == 2 || hullPoints[i] == id1 || hullPoints[i] == id2 || hullPoints[i] == id3)
                     continue;
                 if (InTriangleExtCircle(_vertices[hullPoints[i]].dx, _vertices[hullPoints[i]].dy, _vertices[hullPoints[id1]].dx, _vertices[hullPoints[id1]].dy, _vertices[hullPoints[id2]].dx, _vertices[hullPoints[id2]].dy, _vertices[hullPoints[id3]].dx, _vertices[hullPoints[id3]].dy))
                     return false;
